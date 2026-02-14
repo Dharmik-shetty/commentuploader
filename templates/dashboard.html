@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit Comment Server – Dashboard</title>
+    <style>
+        /* ── Reset & Base ─────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:        #0e0e10;
+            --surface:   #18181b;
+            --surface2:  #1f1f23;
+            --border:    #2d2d33;
+            --text:      #e4e4e7;
+            --text-dim:  #8b8b94;
+            --accent:    #ff4500;
+            --green:     #22c55e;
+            --red:       #ef4444;
+            --yellow:    #facc15;
+            --blue:      #3b82f6;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        /* ── Header ───────────────────────────────────────────── */
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 18px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .header-logo {
+            width: 32px;
+            height: 32px;
+            fill: var(--accent);
+        }
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+        .header h1 span { color: var(--accent); }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 5px 14px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .status-pill.online  { background: rgba(34,197,94,.12); color: var(--green); }
+        .status-pill.offline { background: rgba(239,68,68,.12); color: var(--red); }
+        .status-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .status-pill.online  .status-dot { background: var(--green); }
+        .status-pill.offline .status-dot { background: var(--red); animation: none; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50%      { opacity: .4; }
+        }
+
+        /* ── Container ────────────────────────────────────────── */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 28px 24px 60px;
+        }
+
+        /* ── Stat Cards ───────────────────────────────────────── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            transition: border-color .2s;
+        }
+        .stat-card:hover { border-color: var(--accent); }
+        .stat-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-dim);
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .stat-value.green  { color: var(--green); }
+        .stat-value.red    { color: var(--red); }
+        .stat-value.yellow { color: var(--yellow); }
+        .stat-value.blue   { color: var(--blue); }
+
+        /* ── Section ──────────────────────────────────────────── */
+        .section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .section-header {
+            padding: 16px 22px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+        }
+        .section-header h2 {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .section-header .badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 10px;
+            background: rgba(255,69,0,.12);
+            color: var(--accent);
+        }
+
+        /* ── Table ────────────────────────────────────────────── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        thead th {
+            text-align: left;
+            padding: 10px 18px;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-dim);
+            background: var(--surface2);
+        }
+        tbody td {
+            padding: 10px 18px;
+            border-top: 1px solid var(--border);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 350px;
+        }
+        tbody tr:hover { background: var(--surface2); }
+
+        .tag {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 6px;
+        }
+        .tag.success { background: rgba(34,197,94,.12); color: var(--green); }
+        .tag.fail    { background: rgba(239,68,68,.12); color: var(--red); }
+        .tag.pending { background: rgba(250,204,21,.12); color: var(--yellow); }
+
+        /* ── Toolbar ──────────────────────────────────────────── */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 8px 18px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all .15s;
+        }
+        .btn:hover { border-color: var(--accent); color: var(--accent); }
+        .btn.danger:hover { border-color: var(--red); color: var(--red); }
+        .btn.active {
+            border-color: var(--accent);
+            background: rgba(255,69,0,.08);
+            color: var(--accent);
+        }
+
+        /* ── Empty state ──────────────────────────────────────── */
+        .empty-state {
+            text-align: center;
+            color: var(--text-dim);
+            padding: 40px 20px;
+            font-size: 14px;
+        }
+
+        /* ── Footer ───────────────────────────────────────────── */
+        .footer {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-dim);
+            padding: 20px;
+        }
+
+        /* ── Now-posting banner ────────────────────────────────── */
+        .now-posting {
+            background: linear-gradient(90deg, rgba(255,69,0,.06), rgba(255,69,0,.02));
+            border: 1px solid rgba(255,69,0,.2);
+            border-radius: 10px;
+            padding: 14px 20px;
+            margin-bottom: 20px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+        }
+        .now-posting.visible { display: flex; }
+        .now-posting .spinner {
+            width: 18px; height: 18px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Wait-time info ────────────────────────────────────── */
+        .info-row {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+        .info-row strong { color: var(--text); }
+
+        /* ── Responsive ───────────────────────────────────────── */
+        @media (max-width: 640px) {
+            .header { padding: 14px 16px; }
+            .container { padding: 16px 12px 40px; }
+            .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .stat-value { font-size: 26px; }
+            thead th, tbody td { padding: 8px 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────── -->
+<div class="header">
+    <div class="header-left">
+        <svg class="header-logo" viewBox="0 0 24 24"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
+        <h1>Reddit Comment <span>Server</span></h1>
+    </div>
+    <div id="serverStatus" class="status-pill offline">
+        <span class="status-dot"></span>
+        <span id="statusText">Connecting…</span>
+    </div>
+</div>
+
+<!-- ── Main ────────────────────────────────────────────────── -->
+<div class="container">
+
+    <!-- Stat Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-label">Queue Remaining</span>
+            <span id="queueSize" class="stat-value yellow">–</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Total Received</span>
+            <span id="totalReceived" class="stat-value blue">–</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Successfully Posted</span>
+            <span id="successCount" class="stat-value green">–</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Failed</span>
+            <span id="failCount" class="stat-value red">–</span>
+        </div>
+    </div>
+
+    <!-- Info row -->
+    <div class="info-row">
+        <span>Worker: <strong id="workerStatus">–</strong></span>
+        <span>Wait range: <strong id="waitRange">–</strong></span>
+        <span>Uptime: <strong id="uptime">–</strong></span>
+        <span>Last refresh: <strong id="lastRefresh">–</strong></span>
+    </div>
+
+    <!-- Now-posting banner -->
+    <div id="nowPosting" class="now-posting">
+        <div class="spinner"></div>
+        <span>Currently posting to <strong id="nowPostingSub">…</strong></span>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <button class="btn active" onclick="setTab('pending')">Pending Queue</button>
+        <button class="btn" onclick="setTab('history')">Posting History</button>
+        <button class="btn danger" onclick="clearQueue()">Clear Queue</button>
+    </div>
+
+    <!-- Pending Queue Section -->
+    <div id="tab-pending" class="section">
+        <div class="section-header">
+            <h2>Pending Comments</h2>
+            <span id="pendingBadge" class="badge">0</span>
+        </div>
+        <div id="pendingBody"></div>
+    </div>
+
+    <!-- History Section -->
+    <div id="tab-history" class="section" style="display:none;">
+        <div class="section-header">
+            <h2>Posting History</h2>
+            <span id="historyBadge" class="badge">0</span>
+        </div>
+        <div id="historyBody"></div>
+    </div>
+
+    <div class="footer">Auto-refreshes every 3 seconds &middot; Reddit AI Comment Server</div>
+</div>
+
+<script>
+    /* ── State ──────────────────────────────────────────────── */
+    let currentTab = 'pending';
+    let refreshTimer = null;
+
+    /* ── Tab switching ─────────────────────────────────────── */
+    function setTab(tab) {
+        currentTab = tab;
+        document.getElementById('tab-pending').style.display = tab === 'pending' ? '' : 'none';
+        document.getElementById('tab-history').style.display = tab === 'history' ? '' : 'none';
+        document.querySelectorAll('.toolbar .btn:not(.danger)').forEach(b => b.classList.remove('active'));
+        event.target.classList.add('active');
+    }
+
+    /* ── Clear queue ───────────────────────────────────────── */
+    async function clearQueue() {
+        if (!confirm('Clear all pending comments from the queue?')) return;
+        try {
+            await fetch('/api/clear', { method: 'POST' });
+            fetchStatus();
+        } catch(e) { console.error(e); }
+    }
+
+    /* ── Build table HTML ──────────────────────────────────── */
+    function pendingTable(items) {
+        if (!items || items.length === 0)
+            return '<div class="empty-state">No comments in queue</div>';
+        let html = '<table><thead><tr><th>#</th><th>ID</th><th>Subreddit</th><th>Title</th><th>Status</th></tr></thead><tbody>';
+        items.forEach((it, i) => {
+            html += `<tr>
+                <td>${i + 1}</td>
+                <td>${esc(it.id)}</td>
+                <td>r/${esc(it.subreddit)}</td>
+                <td>${esc(it.title)}</td>
+                <td><span class="tag pending">Queued</span></td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        return html;
+    }
+
+    function historyTable(items) {
+        if (!items || items.length === 0)
+            return '<div class="empty-state">No comments posted yet</div>';
+        let html = '<table><thead><tr><th>#</th><th>ID</th><th>Subreddit</th><th>Title</th><th>Result</th><th>Time</th></tr></thead><tbody>';
+        // Show newest first
+        const reversed = [...items].reverse();
+        reversed.forEach((it, i) => {
+            const cls = it.success ? 'success' : 'fail';
+            const label = it.success ? 'Posted' : 'Failed';
+            const time = it.posted_at ? new Date(it.posted_at).toLocaleTimeString() : '–';
+            html += `<tr>
+                <td>${i + 1}</td>
+                <td>${esc(it.id)}</td>
+                <td>r/${esc(it.subreddit)}</td>
+                <td>${esc(it.title)}</td>
+                <td><span class="tag ${cls}">${label}</span></td>
+                <td>${time}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        return html;
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    /* ── Fetch status ──────────────────────────────────────── */
+    async function fetchStatus() {
+        try {
+            const res = await fetch('/api/dashboard-status');
+            if (!res.ok) throw new Error(res.status);
+            const d = await res.json();
+
+            // Server status pill
+            const pill = document.getElementById('serverStatus');
+            const statusText = document.getElementById('statusText');
+            pill.className = 'status-pill online';
+            statusText.textContent = 'Online';
+
+            // Stat cards
+            document.getElementById('queueSize').textContent = d.queue_size;
+            document.getElementById('totalReceived').textContent = d.total_received;
+            document.getElementById('successCount').textContent = d.total_success;
+            document.getElementById('failCount').textContent = d.total_fail;
+
+            // Info row
+            document.getElementById('workerStatus').textContent = d.worker_alive ? 'Running' : 'Idle';
+            document.getElementById('waitRange').textContent = `${d.min_wait}s – ${d.max_wait}s`;
+            document.getElementById('uptime').textContent = d.uptime;
+            document.getElementById('lastRefresh').textContent = new Date().toLocaleTimeString();
+
+            // Now-posting banner
+            const banner = document.getElementById('nowPosting');
+            if (d.currently_posting) {
+                banner.classList.add('visible');
+                document.getElementById('nowPostingSub').textContent =
+                    `r/${d.currently_posting.subreddit} – "${d.currently_posting.title}"`;
+            } else {
+                banner.classList.remove('visible');
+            }
+
+            // Tables
+            document.getElementById('pendingBody').innerHTML = pendingTable(d.pending);
+            document.getElementById('pendingBadge').textContent = d.queue_size;
+            document.getElementById('historyBody').innerHTML = historyTable(d.recent_history);
+            document.getElementById('historyBadge').textContent = d.recent_history ? d.recent_history.length : 0;
+
+        } catch(e) {
+            console.error('Fetch error:', e);
+            document.getElementById('serverStatus').className = 'status-pill offline';
+            document.getElementById('statusText').textContent = 'Offline';
+        }
+    }
+
+    /* ── Auto-refresh ──────────────────────────────────────── */
+    fetchStatus();
+    refreshTimer = setInterval(fetchStatus, 3000);
+</script>
+</body>
+</html>
