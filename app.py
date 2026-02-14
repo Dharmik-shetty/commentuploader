@@ -357,80 +357,26 @@ def status():
 @app.route("/api/keepalive", methods=["GET"])
 def keepalive():
     """
-    Cron-callable endpoint: keeps the service warm and immediately
-    drains + posts every queued comment with retries (max 3 attempts each).
+    Simple keep-alive endpoint.
+    Prevents Render cold-start/shutdown by receiving traffic.
+    Ensures background worker is actively processing if queue is not empty.
     """
-    posted = 0
-    failed = 0
+    # Simply touching this endpoint keeps the Render service "active"
 
-    # Snapshot session creds once
-    with session_lock:
-        cookies = session_data.get("cookies", {})
-        csrf_token = session_data.get("csrf_token", "")
-        min_w = wait_range["min_wait"]
-        max_w = wait_range["max_wait"]
+    # Safety check: ensure worker is actually running if we have work
+    with queue_lock:
+        has_items = len(comment_queue) > 0
 
-    is_first = True
-    while True:
-        comment = None
-        with queue_lock:
-            if comment_queue:
-                comment = comment_queue.popleft()
-        if comment is None:
-            break  # queue empty
+    if has_items:
+        _ensure_worker()
 
-        # Wait between posts using configured wait range (skip first)
-        if not is_first:
-            delay = random.uniform(min_w, max_w)
-            log.info(f"[keepalive] Waiting {delay:.1f}s before next post …")
-            time.sleep(delay)
-        is_first = False
-
-        # Set currently-posting
-        with currently_posting_lock:
-            global currently_posting
-            currently_posting = comment
-
-        # Try up to 3 times
-        success = False
-        for attempt in range(1, 4):
-            success = post_comment_to_reddit(comment, cookies, csrf_token)
-            if success:
-                break
-            log.warning(f"  Retry {attempt}/3 for comment {comment.get('id', '?')}")
-            time.sleep(2)
-
-        # Clear currently-posting
-        with currently_posting_lock:
-            currently_posting = None
-
-        # Update counters
-        with stats_lock:
-            global total_success, total_fail
-            if success:
-                total_success += 1
-                posted += 1
-            else:
-                total_fail += 1
-                failed += 1
-
-        # Record result
-        result = {
-            "id": comment.get("id", ""),
-            "subreddit": comment.get("subreddit", ""),
-            "title": comment.get("title", "")[:100],
-            "success": success,
-            "posted_at": datetime.now(timezone.utc).isoformat(),
-        }
-        with history_lock:
-            posting_history.append(result)
-            if len(posting_history) > MAX_HISTORY:
-                posting_history.pop(0)
+    worker_alive = worker_thread is not None and worker_thread.is_alive()
 
     return jsonify({
         "status": "alive",
-        "posted": posted,
-        "failed": failed,
+        "message": "Service touched to prevent cold sleep",
+        "queue_size": len(comment_queue),
+        "worker_running": worker_alive,
         "time": datetime.now(timezone.utc).isoformat(),
     })
 
