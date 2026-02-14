@@ -367,7 +367,10 @@ def keepalive():
     with session_lock:
         cookies = session_data.get("cookies", {})
         csrf_token = session_data.get("csrf_token", "")
+        min_w = wait_range["min_wait"]
+        max_w = wait_range["max_wait"]
 
+    is_first = True
     while True:
         comment = None
         with queue_lock:
@@ -375,6 +378,13 @@ def keepalive():
                 comment = comment_queue.popleft()
         if comment is None:
             break  # queue empty
+
+        # Wait between posts using configured wait range (skip first)
+        if not is_first:
+            delay = random.uniform(min_w, max_w)
+            log.info(f"[keepalive] Waiting {delay:.1f}s before next post …")
+            time.sleep(delay)
+        is_first = False
 
         # Set currently-posting
         with currently_posting_lock:
@@ -416,10 +426,6 @@ def keepalive():
             posting_history.append(result)
             if len(posting_history) > MAX_HISTORY:
                 posting_history.pop(0)
-
-        # Small gap between posts to avoid rate-limit
-        if comment_queue:
-            time.sleep(random.uniform(2, 4))
 
     return jsonify({
         "status": "alive",
