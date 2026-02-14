@@ -354,6 +354,81 @@ def status():
     )
 
 
+@app.route("/api/keepalive", methods=["GET"])
+def keepalive():
+    """
+    Cron-callable endpoint: keeps the service warm and immediately
+    drains + posts every queued comment with retries (max 3 attempts each).
+    """
+    posted = 0
+    failed = 0
+
+    # Snapshot session creds once
+    with session_lock:
+        cookies = session_data.get("cookies", {})
+        csrf_token = session_data.get("csrf_token", "")
+
+    while True:
+        comment = None
+        with queue_lock:
+            if comment_queue:
+                comment = comment_queue.popleft()
+        if comment is None:
+            break  # queue empty
+
+        # Set currently-posting
+        with currently_posting_lock:
+            global currently_posting
+            currently_posting = comment
+
+        # Try up to 3 times
+        success = False
+        for attempt in range(1, 4):
+            success = post_comment_to_reddit(comment, cookies, csrf_token)
+            if success:
+                break
+            log.warning(f"  Retry {attempt}/3 for comment {comment.get('id', '?')}")
+            time.sleep(2)
+
+        # Clear currently-posting
+        with currently_posting_lock:
+            currently_posting = None
+
+        # Update counters
+        with stats_lock:
+            global total_success, total_fail
+            if success:
+                total_success += 1
+                posted += 1
+            else:
+                total_fail += 1
+                failed += 1
+
+        # Record result
+        result = {
+            "id": comment.get("id", ""),
+            "subreddit": comment.get("subreddit", ""),
+            "title": comment.get("title", "")[:100],
+            "success": success,
+            "posted_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with history_lock:
+            posting_history.append(result)
+            if len(posting_history) > MAX_HISTORY:
+                posting_history.pop(0)
+
+        # Small gap between posts to avoid rate-limit
+        if comment_queue:
+            time.sleep(random.uniform(2, 4))
+
+    return jsonify({
+        "status": "alive",
+        "posted": posted,
+        "failed": failed,
+        "time": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 @app.route("/api/clear", methods=["POST"])
 def clear_queue():
     """Clear all pending comments from the queue."""
